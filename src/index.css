@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif-zh: "Noto Serif TC", serif;
+  --font-sans-zh: "Noto Sans TC", sans-serif;
+  --font-serif-en: "Fraunces", Georgia, serif;
+  --font-sans-en: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  /* 五行 accent — overridden at runtime */
+  --accent-glow: 106, 140, 175;          /* water default (RGB triple) */
+  --accent-primary: #6A8CAF;
+  --paper: #F5F2ED;
+  --ink: #0A0A0F;
+  --ink-2: #13131A;
+  --text-primary: #EDEAE0;
+  --text-secondary: #8A857A;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ink);
+  color: var(--text-primary);
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  cursor: none;
+  overflow-x: hidden;
+}
+
+/* subtle paper noise for depth */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  z-index: 1;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+a, button { cursor: none; }
+
+/* font helpers */
+.font-serif-zh { font-family: 'Noto Serif TC', serif; }
+.font-sans-zh  { font-family: 'Noto Sans TC', sans-serif; }
+.font-serif-en { font-family: 'Fraunces', Georgia, serif; font-optical-sizing: auto; font-variation-settings: "opsz" 144, "SOFT" 50; }
+.font-sans-en  { font-family: 'Inter', sans-serif; }
+.font-mono     { font-family: 'JetBrains Mono', monospace; }
+
+/* animations */
+@keyframes staggerIn {
+  from { transform: translateY(60%); opacity: 0; filter: blur(6px); }
+  to   { transform: translateY(0);    opacity: 1; filter: blur(0); }
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 0.75; transform: scale(1.02); }
+}
+@keyframes phaseSwap {
+  from { opacity: 0; transform: translateY(12px); filter: blur(8px); }
+  to   { opacity: 1; transform: translateY(0);     filter: blur(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes auraShift {
+  0%   { background-position: 0% 0%; filter: hue-rotate(0deg); }
+  100% { background-position: 100% 100%; filter: hue-rotate(8deg); }
+}
+@keyframes logoBreath {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(var(--accent-glow), 0.4); }
+  50%      { transform: scale(1.06); box-shadow: 0 0 80px rgba(var(--accent-glow), 0.7); }
+}
+
+/* date/time inputs — tame the ugly native controls */
+input[type="date"], input[type="time"] {
+  color-scheme: dark;
+  font-family: 'Noto Serif TC', serif;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.4);
+  cursor: none;
+}
+
+::selection { background: rgba(var(--accent-glow), 0.4); color: white; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-glow), 0.4); }
