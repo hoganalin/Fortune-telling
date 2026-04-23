@@ -363,7 +363,17 @@ function FlowField({ intensity = 1, element = 'water' }) {
 function CursorFollower() {
   const ref = useRef(null);
   const innerRef = useRef(null);
+  // Only render on fine-pointer devices (desktop/laptop with a mouse).
+  // Touch devices have no mousemove, so the cursor would sit frozen at the
+  // initial position and look like a stuck dot.
+  const [enabled] = useState(() =>
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(pointer: fine)').matches
+  );
+
   useEffect(() => {
+    if (!enabled) return;
     let x = window.innerWidth / 2, y = window.innerHeight / 2;
     let tx = x, ty = y;
     const onMove = (e) => { tx = e.clientX; ty = e.clientY; };
@@ -377,7 +387,9 @@ function CursorFollower() {
     };
     loop();
     return () => { window.removeEventListener('mousemove', onMove); cancelAnimationFrame(raf); };
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) return null;
   return (
     <>
       <div ref={ref} className="pointer-events-none fixed top-0 left-0 z-[100] w-[280px] h-[280px] rounded-full"
@@ -1622,27 +1634,27 @@ function TopBar({ onOpenArchive, onRestart }) {
     if (!scrollTo('03 Element')) onRestart?.();
   };
   return (
-    <div className="relative z-30 flex items-center justify-between px-10 pt-8">
-      <div className="flex items-center gap-3">
+    <div className="relative z-30 flex items-center justify-between gap-3 px-5 pt-6 md:px-10 md:pt-8">
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
         <div className="w-2 h-2 rounded-full bg-[rgb(var(--accent-glow))] shadow-[0_0_12px_rgb(var(--accent-glow))]" />
-        <span className="text-[11px] tracking-[0.3em] text-white/60 uppercase font-mono">Aura · AI · Studio</span>
+        <span className="hidden sm:inline text-[11px] tracking-[0.3em] text-white/60 uppercase font-mono">Aura · AI · Studio</span>
       </div>
-      <div className="hidden md:flex items-center gap-8 text-[11px] tracking-[0.25em] text-white/50 uppercase font-mono">
+      <div className="flex items-center gap-3 sm:gap-5 md:gap-8 text-[10px] md:text-[11px] tracking-[0.18em] md:tracking-[0.25em] text-white/55 uppercase font-mono">
         <button onClick={goRitual} className="hover:text-white transition-colors">{t('nav_ceremony')}</button>
         <button onClick={goElements} className="hover:text-white transition-colors">{t('nav_elements')}</button>
-        <button onClick={onOpenArchive} className="hover:text-white transition-colors flex items-center gap-2">
+        <button onClick={onOpenArchive} className="hover:text-white transition-colors flex items-center gap-1.5">
           <span>{t('nav_archive')}</span>
           <ArchiveBadge />
         </button>
-        <div className="flex items-center gap-1 border border-white/15 rounded-full overflow-hidden">
+        <div className="flex items-center border border-white/15 rounded-full overflow-hidden shrink-0">
           <button
             onClick={() => setLang('en')}
-            className={`px-3 py-1 transition-colors ${lang === 'en' ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+            className={`px-2 md:px-3 py-1 transition-colors ${lang === 'en' ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
             EN
           </button>
           <button
             onClick={() => setLang('zh')}
-            className={`px-3 py-1 transition-colors ${lang === 'zh' ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
+            className={`px-2 md:px-3 py-1 transition-colors ${lang === 'zh' ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white/70'}`}>
             繁
           </button>
         </div>
