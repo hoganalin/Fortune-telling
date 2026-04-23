@@ -190,10 +190,53 @@ const ELEMENT_LABEL = {
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
 
+const ALLOWED_REFERERS = (
+  process.env.ALLOWED_REFERERS || 'http://localhost:3000,http://localhost:5173'
+)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedReferer(referer) {
+  if (!referer) return false;
+  return ALLOWED_REFERERS.some((allowed) => referer.startsWith(allowed));
+}
+
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 5;
+const rateBuckets = new Map();
+
+function rateLimited(ip) {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || bucket.resetAt < now) {
+    rateBuckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  if (bucket.count >= RATE_MAX) return true;
+  bucket.count++;
+  return false;
+}
+
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  if (!isAllowedReferer(req.headers.referer || req.headers.origin)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  if (rateLimited(clientIp(req))) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({ error: '請求過於頻繁，請稍後再試' });
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
