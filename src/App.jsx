@@ -363,20 +363,23 @@ function FlowField({ intensity = 1, element = 'water' }) {
 function CursorFollower() {
   const ref = useRef(null);
   const innerRef = useRef(null);
-  // Only render on fine-pointer devices (desktop/laptop with a mouse).
-  // Touch devices have no mousemove, so the cursor would sit frozen at the
-  // initial position and look like a stuck dot.
-  const [enabled] = useState(() =>
-    typeof window !== 'undefined' &&
-    window.matchMedia &&
-    window.matchMedia('(pointer: fine)').matches
-  );
+  // Layer 1: static media-query gate — any device lacking hover+fine-pointer is out.
+  const mediaOk = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    && !('ontouchstart' in window);
+  // Layer 2: runtime gate — only show once an actual mousemove fires. Touch devices
+  // that slip past the media query still never dispatch mousemove, so the dot never appears.
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!mediaOk) return;
     let x = window.innerWidth / 2, y = window.innerHeight / 2;
     let tx = x, ty = y;
-    const onMove = (e) => { tx = e.clientX; ty = e.clientY; };
+    const onMove = (e) => {
+      tx = e.clientX; ty = e.clientY;
+      setVisible(true);
+    };
     window.addEventListener('mousemove', onMove);
     let raf = 0;
     const loop = () => {
@@ -387,9 +390,9 @@ function CursorFollower() {
     };
     loop();
     return () => { window.removeEventListener('mousemove', onMove); cancelAnimationFrame(raf); };
-  }, [enabled]);
+  }, [mediaOk]);
 
-  if (!enabled) return null;
+  if (!mediaOk || !visible) return null;
   return (
     <>
       <div ref={ref} className="pointer-events-none fixed top-0 left-0 z-[100] w-[280px] h-[280px] rounded-full"
