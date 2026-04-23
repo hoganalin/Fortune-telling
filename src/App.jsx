@@ -1029,13 +1029,13 @@ function SloganParallax({ slogan, sloganEn }) {
 function VisualPackage({ element, brandName }) {
   const el = ELEMENTS[element];
   return (
-    <section className="relative py-32 px-10 overflow-hidden" data-screen-label="05 Visual">
+    <section className="relative py-20 md:py-32 px-5 md:px-10 overflow-hidden" data-screen-label="05 Visual">
       <div className="max-w-[1600px] mx-auto">
         <Reveal>
-          <div className="flex items-end justify-between mb-10">
+          <div className="flex items-end justify-between mb-8 md:mb-10">
             <div>
-              <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-3">Chapter IV · Visual Package</div>
-              <h2 className="font-serif-zh text-5xl md:text-6xl text-white">意象 · 4K 動態視覺</h2>
+              <div className="text-[10px] md:text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-3">Chapter IV · Visual Package</div>
+              <h2 className="font-serif-zh text-3xl md:text-6xl text-white leading-tight">意象 · 4K 動態視覺</h2>
             </div>
             <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase hidden md:block">
               3840 × 2160 · 24fps · H.265
@@ -1044,7 +1044,7 @@ function VisualPackage({ element, brandName }) {
         </Reveal>
 
         <Reveal delay={150}>
-          <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[16/9] group">
+          <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[4/3] sm:aspect-[16/9] group">
             {/* Simulated 4K aura video */}
             <div className="absolute inset-0"
                  style={{
@@ -1059,16 +1059,16 @@ function VisualPackage({ element, brandName }) {
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
 
             {/* brand mark */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="w-20 h-20 rounded-full border border-white/40 backdrop-blur-xl flex items-center justify-center mb-6"
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+              <div className="w-14 h-14 md:w-20 md:h-20 rounded-full border border-white/40 backdrop-blur-xl flex items-center justify-center mb-4 md:mb-6"
                    style={{ boxShadow: `0 0 60px rgba(${el.glow}, 0.6)`, animation: 'logoBreath 4s ease-in-out infinite' }}>
-                <div className="font-serif-zh text-3xl" style={{ color: el.primary }}>{el.zh}</div>
+                <div className="font-serif-zh text-2xl md:text-3xl" style={{ color: el.primary }}>{el.zh}</div>
               </div>
-              <div className="font-serif-en text-white text-5xl md:text-7xl tracking-wide mb-2"
+              <div className="font-serif-en text-white text-3xl md:text-7xl tracking-wide mb-2 break-words max-w-full"
                    style={{ textShadow: `0 0 40px rgba(${el.glow}, 0.5)` }}>
                 {brandName}
               </div>
-              <div className="font-mono text-[10px] tracking-[0.4em] text-white/60 uppercase">
+              <div className="font-mono text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] text-white/60 uppercase">
                 A Manifested Aura · Edition 壹
               </div>
             </div>
