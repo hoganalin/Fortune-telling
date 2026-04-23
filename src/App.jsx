@@ -14,15 +14,35 @@ const ELEMENTS = {
   earth: { zh: '土', en: 'Earth',  primary: '#D4B896', deep: '#8B6F47', glow: '212, 184, 150', poem: '厚德載物，中正安舒' },
 };
 
-// Stem→element mapping (天干 → 五行), used to derive element from birth year's last digit
-const YEAR_ELEMENT = ['metal','metal','water','water','wood','wood','fire','fire','earth','earth'];
+// 天干 index → 五行
+//  0:甲 1:乙 = 木   2:丙 3:丁 = 火   4:戊 5:己 = 土   6:庚 7:辛 = 金   8:壬 9:癸 = 水
+const STEM_ELEMENT = ['wood','wood','fire','fire','earth','earth','metal','metal','water','water'];
+
+// Gregorian → Julian Day Number (Fliegel–Van Flandern).
+function gregorianToJDN(y, m, d) {
+  const a = Math.floor((14 - m) / 12);
+  const yy = y + 4800 - a;
+  const mm = m + 12 * a - 3;
+  return d + Math.floor((153 * mm + 2) / 5)
+    + 365 * yy + Math.floor(yy / 4)
+    - Math.floor(yy / 100) + Math.floor(yy / 400)
+    - 32045;
+}
+
+// Day-stem index for a Gregorian date.
+// Anchor: 2000-01-07 (JDN 2451551) is a 甲子日 (day-stem 甲, index 0).
+// Verified against 1992-07-17 → 甲 (甲午日主).
+function dayStemIndex(dateStr) {
+  const parts = String(dateStr).split('-').map(Number);
+  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return 0;
+  const [y, m, d] = parts;
+  const diff = gregorianToJDN(y, m, d) - 2451551;
+  return ((diff % 10) + 10) % 10;
+}
+
 function deriveElement(name, dateStr) {
   if (!dateStr) return 'water';
-  const y = parseInt(dateStr.slice(0,4), 10);
-  if (Number.isNaN(y)) return 'water';
-  // Stem cycle anchored at 1984 (甲子). 1984 → 甲木.
-  const stem = ((y - 4) % 10 + 10) % 10;
-  return YEAR_ELEMENT[stem];
+  return STEM_ELEMENT[dayStemIndex(dateStr)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -766,15 +786,27 @@ function Ceremony({ active, onDone, element, ready = true }) {
         <canvas ref={canvasRef} className="w-[520px] h-[520px] max-w-[90vw] max-h-[90vw]" />
 
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div key={phase}
-               className="text-center"
-               style={{ animation: 'phaseSwap 0.6s cubic-bezier(.2,.7,.2,1) both' }}>
-            <div className="text-[10px] tracking-[0.5em] text-white/50 uppercase font-mono mb-3">
-              Phase {String(phase + 1).padStart(2, '0')} of 03 · {PHASES[phase].en}
+          {animationDone && !ready ? (
+            <div className="text-center" style={{ animation: 'phaseSwap 0.6s cubic-bezier(.2,.7,.2,1) both' }}>
+              <div className="text-[10px] tracking-[0.5em] text-white/50 uppercase font-mono mb-3">
+                Awaiting the Oracle · 等待天機
+              </div>
+              <h3 className="font-serif-zh text-6xl text-white mb-3 tracking-[0.15em]">
+                <span style={{ animation: 'breathe 2.4s ease-in-out infinite' }}>顯化中</span>
+              </h3>
+              <p className="font-serif-zh text-sm text-white/60 italic">
+                命盤正在 Claude 筆下落款，略候片刻…（通常 30–80 秒）
+              </p>
             </div>
-            <h3 className="font-serif-zh text-6xl text-white mb-3 tracking-[0.15em]">{PHASES[phase].zh}</h3>
-            <p className="font-serif-zh text-sm text-white/60 italic">{PHASES[phase].text}</p>
-          </div>
+          ) : (
+            <div key={phase} className="text-center" style={{ animation: 'phaseSwap 0.6s cubic-bezier(.2,.7,.2,1) both' }}>
+              <div className="text-[10px] tracking-[0.5em] text-white/50 uppercase font-mono mb-3">
+                Phase {String(phase + 1).padStart(2, '0')} of 03 · {PHASES[phase].en}
+              </div>
+              <h3 className="font-serif-zh text-6xl text-white mb-3 tracking-[0.15em]">{PHASES[phase].zh}</h3>
+              <p className="font-serif-zh text-sm text-white/60 italic">{PHASES[phase].text}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -782,12 +814,16 @@ function Ceremony({ active, onDone, element, ready = true }) {
       <div className="absolute bottom-16 left-0 right-0 px-10">
         <div className="max-w-xl mx-auto">
           <div className="flex justify-between text-[10px] tracking-[0.3em] text-white/40 uppercase font-mono mb-3">
-            <span>Forging the aura</span>
-            <span>{String(Math.floor(progress)).padStart(3, '0')}%</span>
+            <span>{animationDone && !ready ? 'Awaiting the oracle' : 'Forging the aura'}</span>
+            <span>{animationDone && !ready ? '∞' : `${String(Math.floor(progress)).padStart(3, '0')}%`}</span>
           </div>
           <div className="h-px bg-white/10 relative">
             <div className="absolute left-0 top-0 h-px bg-[rgb(var(--accent-glow))] transition-all duration-100"
-                 style={{ width: `${progress}%`, boxShadow: `0 0 12px rgba(var(--accent-glow), 0.8)` }} />
+                 style={{
+                   width: `${progress}%`,
+                   boxShadow: `0 0 12px rgba(var(--accent-glow), 0.8)`,
+                   animation: animationDone && !ready ? 'breathe 1.8s ease-in-out infinite' : 'none',
+                 }} />
           </div>
         </div>
       </div>
@@ -1790,6 +1826,8 @@ function AppInner() {
     const fallback = { element: elem, ...POOLS[elem] };
 
     let result = fallback;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000); // 90s hard cap
     try {
       const resp = await fetch('/api/reading', {
         method: 'POST',
@@ -1801,16 +1839,19 @@ function AppInner() {
           location: data.location || '',
           element: elem,
         }),
+        signal: controller.signal,
       });
       if (resp.ok) {
         const ai = await resp.json();
         result = mergeReading(ai, fallback);
       } else {
-        // Non-2xx: log and use fallback silently so the UX keeps flowing.
-        console.warn('[aura] /api/reading non-OK', resp.status);
+        const errBody = await resp.text().catch(() => '');
+        console.warn('[aura] /api/reading non-OK', resp.status, errBody.slice(0, 300));
       }
     } catch (err) {
       console.warn('[aura] /api/reading failed, using fallback', err);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     setGenerated(result);

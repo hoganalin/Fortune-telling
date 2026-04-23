@@ -212,7 +212,7 @@ export default async function handler(req, res) {
     `姓名：${name}`,
     `生辰：${date}${time ? ` ${time}` : ''}`,
     `出生地：${location || '（未提供）'}`,
-    `主元素（已由客戶端依年干推算）：${ELEMENT_LABEL[element]}`,
+    `主元素（已由客戶端依日干推算，即 bazi 日主）：${ELEMENT_LABEL[element]}`,
     `當前日期（用於 fortune.day/month/year 切片）：${now.toISOString().slice(0, 10)}`,
     `資料級別：${time && location ? 'S' : time || location ? 'A' : 'B'}`,
     '',
