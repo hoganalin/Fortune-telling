@@ -26,6 +26,14 @@ const SYSTEM_PROMPT = `你是一位有門道的全體系命理師，風格穩、
 - 缺日期 → 不要做，回傳空
 這次只用系統提示到的結構化欄位，不要在輸出中用元標籤或免責聲明擾亂內容。
 
+## 客製化要求（硬性）
+你會收到完整四柱（年/月/日/時）、五行分布計數、日主強弱、命中所缺元素、以及姓名拆字。
+- analysis.s1（體質綜述）必須**明確引用至少兩項具體事實**：例如「日主XX得X分」「命中缺X」「年柱XX」「名XX三字皆屬X」。不可只談五行抽象論。
+- analysis.s2（當前課題）必須引用「缺什麼」或「何者過旺」，並把它連結到具體生活面向。
+- analysis.s3（破局路徑）給的建議必須對應到所缺/所旺的元素，而非泛泛的修養雞湯。
+- lessons / remedies 至少有一項要明確呼應「日主強弱」或「所缺元素」。
+- 嚴禁產出能套到任何人身上的通用文字。每段要有「這是XX這個人」的不可替代感。
+
 ## 安全欄柵（硬性）
 - 不給醫療、法律、投資絕對結論；若話題涉及，以「生活層面的調整」口吻給方向
 - 不恐嚇、不宿命論；提出可行動的建議
@@ -244,23 +252,53 @@ export default async function handler(req, res) {
   }
 
   const body = req.body && typeof req.body === 'object' ? req.body : {};
-  const { name, date, time, location, element } = body;
+  const { name, date, time, location, element, pillars, distribution, dayMaster, missing, nameChars, question } = body;
 
   if (!name || !date || !element || !ELEMENT_LABEL[element]) {
     return res.status(400).json({ error: 'Missing required fields: name, date, element' });
   }
 
   const now = new Date();
-  const userPayload = [
+  const lines = [
     `姓名：${name}`,
     `生辰：${date}${time ? ` ${time}` : ''}`,
     `出生地：${location || '（未提供）'}`,
     `主元素（已由客戶端依日干推算，即 bazi 日主）：${ELEMENT_LABEL[element]}`,
     `當前日期（用於 fortune.day/month/year 切片）：${now.toISOString().slice(0, 10)}`,
     `資料級別：${time && location ? 'S' : time || location ? 'A' : 'B'}`,
-    '',
-    '依上述資料與系統提示的五行框架，生成完整結構化 reading。',
-  ].join('\n');
+  ];
+
+  if (pillars) {
+    const fmt = (p) => p ? `${p.stem}${p.branch}（${p.element}）` : '時辰未明';
+    lines.push('');
+    lines.push('### 四柱命盤');
+    lines.push(`年柱：${fmt(pillars.year)}　月柱：${fmt(pillars.month)}　日柱：${fmt(pillars.day)}　時柱：${fmt(pillars.hour)}`);
+  }
+  if (distribution) {
+    lines.push(`五行分布：金 ${distribution.metal} · 木 ${distribution.wood} · 水 ${distribution.water} · 火 ${distribution.fire} · 土 ${distribution.earth}`);
+  }
+  if (dayMaster) {
+    lines.push(`日主強弱：${dayMaster.strength}（日主 ${dayMaster.element} 共 ${dayMaster.dayCount} / ${dayMaster.total} 分）`);
+  }
+  if (Array.isArray(missing) && missing.length) {
+    lines.push(`命中所缺：${missing.join('、')}`);
+  } else if (Array.isArray(missing)) {
+    lines.push('命中所缺：無（五行俱全）');
+  }
+  if (Array.isArray(nameChars) && nameChars.length) {
+    const summary = nameChars.map((c) => `${c.ch}(${c.element}${c.inferred ? '~' : ''})`).join(' ');
+    lines.push(`姓名拆字：${summary}（"~" 表示由字碼 fallback 推得，僅供參考）`);
+  }
+
+  if (question && typeof question === 'string' && question.trim()) {
+    lines.push('');
+    lines.push(`使用者特別想問：「${question.trim().slice(0, 120)}」`);
+    lines.push('→ 請在 analysis.s2（當前課題 × 阻力來源）中明確回應這個提問，並在 lessons 至少一項給出對應的行動建議。');
+  }
+
+  lines.push('');
+  lines.push('依上述完整結構化資料與系統提示的客製化要求，生成 reading。記住：每段必須引用具體事實，不可泛泛論。');
+  const userPayload = lines.join('\n');
 
   try {
     const client = new Anthropic();
