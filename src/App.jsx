@@ -2,6 +2,7 @@
 // Design system declared at top as CSS variables; 五行 accent switches at runtime.
 
 import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
+import { useAnonymousAuth, saveReading, createInvite, getInviteInfo, completeInvite, isSupabaseConfigured, saveInquiry, loadInquiries, postInquiry } from './lib/supabase';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 1. DESIGN TOKENS (五行 color system + motion)
@@ -237,6 +238,7 @@ const STRINGS = {
   nav_archive:    { zh: '封存', en: 'Archive' },
 
   // Hero
+  hero_brand:     { zh: 'Aura · AI 五行',                  en: 'Aura · AI 五行' },
   hero_edition:   { zh: 'Edition 壹 · 二〇二六 · 春',      en: 'Edition 壹 · Spring 2026' },
   hero_l1:        { zh: '顯化你的',                        en: 'Divine your' },
   hero_l2:        { zh: '人生氣場。',                      en: "life's aura." },
@@ -281,19 +283,6 @@ const STRINGS = {
   er_guest:       { zh: '訪客',                            en: 'Guest' },
   er_meta:        { zh: '主元素',                          en: 'Primary Element' },
 
-  // Slogan
-  sl_chapter:     { zh: 'Chapter III · 品牌口號',          en: 'Chapter III · Slogan' },
-  sl_gen:         { zh: '已生成 · Edition 壹',             en: 'Generated · Edition 壹' },
-
-  // Visual
-  vp_chapter:     { zh: 'Chapter IV · 動態視覺',          en: 'Chapter IV · Visual Package' },
-  vp_title:       { zh: '意象 · 4K 動態視覺',              en: 'Imagery · 4K Motion Aura' },
-  vp_spec:        { zh: '3840 × 2160 · 24fps · H.265',    en: '3840 × 2160 · 24fps · H.265' },
-  vp_mark_label:  { zh: '顯化的氣場 · Edition 壹',         en: 'A Manifested Aura · Edition 壹' },
-  vp_format:      { zh: '格式',      en: 'Format' },
-  vp_aspect:      { zh: '畫面比',    en: 'Aspect' },
-  vp_duration:    { zh: '片長',      en: 'Duration' },
-
   // Services
   sv_chapter:     { zh: 'Chapter V · 服務擬定',           en: 'Chapter V · Offerings' },
   sv_title_pre:   { zh: '為你擬定的', en: 'Three services' },
@@ -319,8 +308,8 @@ const STRINGS = {
   an_prep_v:      { zh: 'Aura AI Studio', en: 'Aura AI Studio' },
   an_s1_h:        { zh: '§ 01 — 體質綜述',       en: '§ 01 — Constitutional Summary' },
   an_s1_zh:       { zh: '',                      en: '體質綜述' },
-  an_s2_h:        { zh: '§ 02 — 品牌定位',       en: '§ 02 — Brand Positioning' },
-  an_s2_zh:       { zh: '',                      en: '品牌定位建議' },
+  an_s2_h:        { zh: '§ 02 — 當前課題',       en: '§ 02 — Current Challenge' },
+  an_s2_zh:       { zh: '',                      en: '當前課題與阻力' },
   an_s3_h:        { zh: '§ 03 — 節奏與儀式',     en: '§ 03 — Cadence & Ritual' },
   an_s3_zh:       { zh: '',                      en: '節奏與儀式' },
   an_end:         { zh: '— 文件終 —',            en: '— End of document —' },
@@ -352,6 +341,25 @@ const STRINGS = {
   ar_close:       { zh: '關閉',           en: 'Close' },
   ar_clear:       { zh: '全部清除',       en: 'Clear all' },
   ar_generated:   { zh: '生成於',         en: 'Generated' },
+
+  // Inquiry (Chapter VIII · 對談)
+  iq_chapter:     { zh: 'Chapter VIII · 對談',          en: 'Chapter VIII · Inquiry' },
+  iq_title:       { zh: '與你的命盤對話',                en: 'Converse with your aura' },
+  iq_tagline:     { zh: '原本問的、之後想到的，都可以再問。每次回答 300 字以上、引用你的實際命盤。',
+                    en: 'Ask further. Every response cites your actual chart, 300 words or more.' },
+  iq_initial_q:   { zh: '你問的',                       en: 'You asked' },
+  iq_no_initial:  { zh: '（你還沒問問題；下面打字直接開始對談）',
+                    en: '(No initial question — type below to start the conversation)' },
+  iq_input_ph:    { zh: '想再問什麼？例如：那我下半年該怎麼安排重要決定？',
+                    en: 'Ask further… e.g. how should I plan major decisions this half-year?' },
+  iq_send:        { zh: '送出 →',                       en: 'Send →' },
+  iq_thinking:    { zh: '凝神中⋯',                      en: 'Contemplating…' },
+  iq_error:       { zh: 'AI 暫時無法回答，請稍後再試',     en: 'AI temporarily unavailable. Please retry.' },
+  iq_retry:       { zh: '重試',                          en: 'Retry' },
+  iq_offline:     { zh: '目前離線模式（未連接 Supabase），對談需要 vercel dev + 已設定 Supabase',
+                    en: 'Offline mode — Q&A requires vercel dev + Supabase configured' },
+  iq_you:         { zh: '你',                            en: 'You' },
+  iq_sage:        { zh: '命理',                          en: 'Sage' },
 };
 
 const LangContext = createContext({ lang: 'zh', t: (k) => k, setLang: () => {} });
@@ -363,7 +371,6 @@ const makeT = (lang) => (key) => (STRINGS[key] && STRINGS[key][lang]) ?? key;
 // response arrives.
 const POOLS = {
   metal: {
-    brand: 'Forge & Still', slogan: '鋒芒所向，皆成器物。', sloganEn: 'Every edge, an instrument.',
     lessons: [
       { zh: '立斷', en: 'Decisive Cut', glyph: '斷', desc: '本月擇一懸而未決之事，於月圓前了斷。金貴決不貴繞。', tag: '今月 · 行動' },
       { zh: '削繁', en: 'Prune', glyph: '削', desc: '盤點手邊事物，割捨三成不必要之物與人。金旺於秋，宜減不宜增。', tag: '季度 · 整理' },
@@ -376,7 +383,6 @@ const POOLS = {
     ],
   },
   wood: {
-    brand: 'Verdant Studio', slogan: '舒展如春，生發不息。', sloganEn: 'Grow towards the light.',
     lessons: [
       { zh: '伸展', en: 'Unfold', glyph: '舒', desc: '本月啟動一件擱置已久的創作。木性生發，忌壓抑。', tag: '今月 · 啟動' },
       { zh: '立志', en: 'Set Direction', glyph: '志', desc: '寫下未來三年之向。木需有方向方能成林。', tag: '季度 · 定向' },
@@ -389,7 +395,6 @@ const POOLS = {
     ],
   },
   water: {
-    brand: 'Moonwell', slogan: '至柔克剛，因勢而流。', sloganEn: 'Flow finds its own form.',
     lessons: [
       { zh: '深潛', en: 'Descend', glyph: '潛', desc: '本月閉關三日，不社交、不表態。水聚於深處方有力。', tag: '今月 · 內觀' },
       { zh: '等候', en: 'Wait', glyph: '待', desc: '遇一難決之事，刻意延後 21 日再回應。水不與石爭，繞之則過。', tag: '持續 · 修養' },
@@ -402,7 +407,6 @@ const POOLS = {
     ],
   },
   fire: {
-    brand: 'Cinnabar & Co.', slogan: '炎上明動，光而不耀。', sloganEn: 'Burn without blinding.',
     lessons: [
       { zh: '明志', en: 'Declare', glyph: '明', desc: '本月對一人坦白心之所向。火需表達方能不悶燒。', tag: '今月 · 表態' },
       { zh: '節焰', en: 'Temper the Flame', glyph: '節', desc: '每日擇一時段不碰通訊。火旺易焚己，需自留餘地。', tag: '每日 · 收斂' },
@@ -415,7 +419,6 @@ const POOLS = {
     ],
   },
   earth: {
-    brand: 'Terra Hall', slogan: '厚德載物，行遠必自邇。', sloganEn: 'To go far, begin close.',
     lessons: [
       { zh: '築基', en: 'Lay the Ground', glyph: '基', desc: '本月不追新，專注一事做滿 30 日。土貴在厚積。', tag: '今月 · 沉澱' },
       { zh: '守信', en: 'Keep the Word', glyph: '信', desc: '盤點三個未兌現之承諾，本月內全部了結。土失信則崩。', tag: '立即 · 修信' },
@@ -434,13 +437,11 @@ const POOLS = {
 function mergeReading(ai, fallback) {
   return {
     element: ai.element || fallback.element,
-    brand: ai.brand || fallback.brand,
-    slogan: ai.slogan?.zh || fallback.slogan,
-    sloganEn: ai.slogan?.en || fallback.sloganEn,
     lessons: Array.isArray(ai.lessons) && ai.lessons.length ? ai.lessons : fallback.lessons,
     remedies: Array.isArray(ai.remedies) && ai.remedies.length ? ai.remedies : fallback.remedies,
     fortune: ai.fortune || null,
     analysis: ai.analysis || null,
+    qa: ai.qa || null,
   };
 }
 
@@ -759,6 +760,9 @@ function Hero({ onStart, element, onOpenArchive, onRestart, onOpenSynastry }) {
       <div className="relative z-10 flex flex-col items-start justify-center min-h-[calc(100vh-120px)] px-10 md:px-20 max-w-[1600px] mx-auto"
            style={{ transform: `translateY(${scrollY * 0.25}px)`, opacity: 1 - Math.min(1, scrollY / 700) }}>
         <Reveal delay={100}>
+          <div className="font-serif-en text-white/85 text-sm tracking-[0.3em] uppercase mb-4">
+            {t('hero_brand')}
+          </div>
           <div className="flex items-center gap-4 mb-8">
             <div className="h-px w-16 bg-white/30" />
             <span className="text-[11px] tracking-[0.4em] text-white/60 uppercase font-mono">{t('hero_edition')}</span>
@@ -1440,184 +1444,46 @@ function Bazi({ pillars, distribution, name }) {
 // ─────────────────────────────────────────────────────────────────────────
 // 11. SLOGAN PARALLAX
 // ─────────────────────────────────────────────────────────────────────────
-function SloganParallax({ slogan, sloganEn }) {
-  const [scroll, setScroll] = useState(0);
-  const sectionRef = useRef(null);
-  useEffect(() => {
-    const onScroll = () => {
-      if (!sectionRef.current) return;
-      const r = sectionRef.current.getBoundingClientRect();
-      const progress = 1 - (r.top + r.height / 2) / window.innerHeight;
-      setScroll(progress);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  return (
-    <section ref={sectionRef} className="relative min-h-[130vh] py-40 px-10 overflow-hidden" data-screen-label="04 Slogan">
-      <div className="sticky top-0 min-h-screen flex flex-col justify-center">
-        <Reveal>
-          <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-8 max-w-[1600px] mx-auto w-full">
-            Chapter III · Slogan
-          </div>
-        </Reveal>
-
-        <div className="max-w-[1600px] mx-auto w-full">
-          <div className="font-serif-zh text-white/95 leading-[0.95]"
-               style={{ fontSize: 'clamp(3rem, 11vw, 11rem)', transform: `translateX(${-scroll * 80}px)`, textShadow: `0 0 80px var(--user-highlight)` }}>
-            {slogan.split('').map((ch, i) => (
-              <span key={i} className="inline-block"
-                    style={{ transform: `translateY(${Math.sin(scroll * 3 + i * 0.4) * 12}px)` }}>
-                {ch}
-              </span>
-            ))}
-          </div>
-          <div className="font-serif-en italic mt-8 leading-tight"
-               style={{ fontSize: 'clamp(1.5rem, 3.5vw, 3.5rem)', transform: `translateX(${scroll * 60}px)`, color: 'var(--user-primary)' }}>
-            {sloganEn}
-          </div>
-
-          <div className="mt-16 flex items-center gap-6 max-w-xl">
-            <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, transparent, var(--user-accent), transparent)` }} />
-            <span className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">Generated · Edition 壹</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
+// 12. BRAND PALETTE (personal colors derived from name + birth)
 // ─────────────────────────────────────────────────────────────────────────
-// 12. VISUAL PACKAGE (mock 4K bg + logo)
-// ─────────────────────────────────────────────────────────────────────────
-function VisualPackage({ element, brandName, palette }) {
-  const el = ELEMENTS[element];
+function BrandPalette({ palette }) {
+  const { lang } = useLang();
+  if (!Array.isArray(palette) || palette.length === 0) return null;
   return (
-    <section className="relative py-20 md:py-32 px-5 md:px-10 overflow-hidden" data-screen-label="05 Visual">
+    <section className="relative py-20 md:py-32 px-5 md:px-10 overflow-hidden" data-screen-label="05 Palette">
       <div className="max-w-[1600px] mx-auto">
         <Reveal>
           <div className="flex items-end justify-between mb-8 md:mb-10">
             <div>
-              <div className="text-[10px] md:text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-3">Chapter IV · Visual Package</div>
-              <h2 className="font-serif-zh text-3xl md:text-6xl text-white leading-tight">意象 · 4K 動態視覺</h2>
+              <div className="text-[10px] md:text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-3">
+                {lang === 'zh' ? 'Chapter IV · 品牌色票' : 'Chapter IV · Palette'}
+              </div>
+              <h2 className="font-serif-zh text-3xl md:text-6xl text-white leading-tight">
+                {lang === 'zh' ? '你的專屬色票' : 'Your Personal Palette'}
+              </h2>
             </div>
             <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase hidden md:block">
-              3840 × 2160 · 24fps · H.265
+              {lang === 'zh' ? '由姓名與生辰推導' : 'Derived from name + birth'}
             </div>
           </div>
         </Reveal>
 
         <Reveal delay={150}>
-          <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[4/3] sm:aspect-[16/9] group">
-            {/* Simulated 4K aura video */}
-            <div className="absolute inset-0"
-                 style={{
-                   background: `
-                     radial-gradient(ellipse at 30% 40%, rgba(${el.glow}, 0.55), transparent 55%),
-                     radial-gradient(ellipse at 70% 60%, ${el.deep}60, transparent 60%),
-                     radial-gradient(ellipse at 50% 100%, rgba(${el.glow}, 0.25), transparent 70%),
-                     #0A0A0F`,
-                   animation: 'auraShift 8s ease-in-out infinite alternate',
-                 }} />
-            <FlowField intensity={0.7} element={element} />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
-
-            {/* brand mark */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-              <div className="w-14 h-14 md:w-20 md:h-20 rounded-full border border-white/40 backdrop-blur-xl flex items-center justify-center mb-4 md:mb-6"
-                   style={{ boxShadow: `0 0 60px rgba(${el.glow}, 0.6)`, animation: 'logoBreath 4s ease-in-out infinite' }}>
-                <div className="font-serif-zh text-2xl md:text-3xl" style={{ color: el.primary }}>{el.zh}</div>
-              </div>
-              <div className="font-serif-en text-white text-3xl md:text-7xl tracking-wide mb-2 break-words max-w-full"
-                   style={{ textShadow: `0 0 40px rgba(${el.glow}, 0.5)` }}>
-                {brandName}
-              </div>
-              <div className="font-mono text-[9px] md:text-[10px] tracking-[0.3em] md:tracking-[0.4em] text-white/60 uppercase">
-                A Manifested Aura · Edition 壹
-              </div>
-            </div>
-
-            {/* corner brackets */}
-            <Corners />
-            <Timecode />
-          </div>
-        </Reveal>
-
-        <Reveal delay={300}>
-          <div className="grid md:grid-cols-3 gap-6 mt-6 text-[11px] font-mono tracking-[0.2em] text-white/50 uppercase">
-            <div className="flex justify-between border-t border-white/10 pt-4"><span>Format</span><span className="text-white/80">MP4 · H.265</span></div>
-            <div className="flex justify-between border-t border-white/10 pt-4"><span>Aspect</span><span className="text-white/80">16:9 · 9:16 · 1:1</span></div>
-            <div className="flex justify-between border-t border-white/10 pt-4"><span>Duration</span><span className="text-white/80">00:00:12</span></div>
-          </div>
-        </Reveal>
-
-        {Array.isArray(palette) && palette.length > 0 && (
-          <Reveal delay={400}>
-            <div className="mt-10 md:mt-14 pt-6 md:pt-8 border-t border-white/15">
-              <div className="flex items-end justify-between mb-5 md:mb-6">
-                <div className="font-mono text-[10px] tracking-[0.3em] text-white/45 uppercase">
-                  Personal Palette · 你的專屬色票
-                </div>
-                <div className="font-mono text-[10px] tracking-[0.2em] text-white/35 uppercase hidden md:block">
-                  Derived from name + birth
+          <div className="grid grid-cols-3 gap-3 md:gap-5">
+            {palette.map((p) => (
+              <div key={p.name} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 md:p-4 flex items-center gap-3 md:gap-4 backdrop-blur-xl">
+                <div className="w-12 h-12 md:w-16 md:h-16 rounded-md flex-shrink-0"
+                     style={{ background: p.hex, boxShadow: `0 0 36px -8px ${p.hex}` }} />
+                <div className="min-w-0">
+                  <div className="font-mono text-[9px] md:text-[10px] tracking-[0.3em] text-white/55 uppercase truncate">{p.name}</div>
+                  <div className="font-mono text-xs md:text-sm text-white/90 mt-1">{p.hex.toUpperCase()}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 md:gap-5">
-                {palette.map((p) => (
-                  <div key={p.name} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 md:p-4 flex items-center gap-3 md:gap-4 backdrop-blur-xl">
-                    <div className="w-12 h-12 md:w-16 md:h-16 rounded-md flex-shrink-0"
-                         style={{ background: p.hex, boxShadow: `0 0 36px -8px ${p.hex}` }} />
-                    <div className="min-w-0">
-                      <div className="font-mono text-[9px] md:text-[10px] tracking-[0.3em] text-white/55 uppercase truncate">{p.name}</div>
-                      <div className="font-mono text-xs md:text-sm text-white/90 mt-1">{p.hex.toUpperCase()}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
-        )}
+            ))}
+          </div>
+        </Reveal>
       </div>
     </section>
-  );
-}
-
-function Corners() {
-  return (
-    <>
-      {['top-4 left-4', 'top-4 right-4', 'bottom-4 left-4', 'bottom-4 right-4'].map((pos, i) => (
-        <div key={i} className={`absolute ${pos} w-5 h-5`}>
-          <div className="absolute inset-0 border-white/30" style={{
-            borderTop: pos.includes('top') ? '1px solid' : 'none',
-            borderBottom: pos.includes('bottom') ? '1px solid' : 'none',
-            borderLeft: pos.includes('left') ? '1px solid' : 'none',
-            borderRight: pos.includes('right') ? '1px solid' : 'none',
-            width: '20px', height: '20px',
-          }} />
-        </div>
-      ))}
-    </>
-  );
-}
-
-function Timecode() {
-  const [tc, setTc] = useState('00:00:00:00');
-  useEffect(() => {
-    let f = 0;
-    const id = setInterval(() => {
-      f = (f + 1) % (24 * 12);
-      const s = Math.floor(f / 24);
-      const ff = f % 24;
-      setTc(`00:00:${String(s).padStart(2,'0')}:${String(ff).padStart(2,'0')}`);
-    }, 42);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="absolute bottom-6 left-6 font-mono text-[10px] tracking-[0.2em] text-white/70">
-      ● REC · {tc}
-    </div>
   );
 }
 
@@ -2118,7 +1984,7 @@ function Footer({ element, onRestart }) {
 // ─────────────────────────────────────────────────────────────────────────
 // 15c-bis. SHARE CARD (1200×630 canvas → PNG download)
 // ─────────────────────────────────────────────────────────────────────────
-function drawShareCard({ name, element, brand, slogan, sloganEn, palette }) {
+function drawShareCard({ name, element, palette }) {
   const W = 1200, H = 630;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -2166,20 +2032,15 @@ function drawShareCard({ name, element, brand, slogan, sloganEn, palette }) {
   ctx.fillText(el.zh, W / 2, 290);
   ctx.shadowBlur = 0;
 
-  // Brand name
+  // Element English label
   ctx.fillStyle = '#ffffff';
   ctx.font = '500 56px Georgia, "Times New Roman", serif';
-  ctx.fillText(brand || 'Untitled', W / 2, 380);
+  ctx.fillText(el.en, W / 2, 380);
 
-  // Slogan zh
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.font = '400 30px "Noto Serif TC", "Songti TC", serif';
-  ctx.fillText(slogan || '', W / 2, 440);
-
-  // Slogan en
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.font = 'italic 400 20px Georgia, serif';
-  ctx.fillText(sloganEn || '', W / 2, 478);
+  // Element poem (zh)
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.font = '400 28px "Noto Serif TC", "Songti TC", serif';
+  ctx.fillText(el.poem, W / 2, 450);
 
   // Palette dots
   if (Array.isArray(palette) && palette.length) {
@@ -2209,9 +2070,6 @@ function ShareCardButton({ user, generated, palette }) {
       const canvas = drawShareCard({
         name: user.name,
         element: generated.element,
-        brand: generated.brand,
-        slogan: generated.slogan,
-        sloganEn: generated.sloganEn,
         palette,
       });
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
@@ -2234,6 +2092,607 @@ function ShareCardButton({ user, generated, palette }) {
           className="group relative px-6 md:px-8 py-3 rounded-full border border-white/20 bg-white/[0.04] backdrop-blur-xl text-white/85 hover:text-white hover:border-white/40 hover:bg-white/[0.08] transition-all font-mono text-[11px] tracking-[0.3em] uppercase disabled:opacity-50">
           {busy ? '生成中…' : '↓ 下載分享卡 · Download Share Card'}
         </button>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 15c-quart. INVITE PAGE — B's flow when arriving via ?invite=<token>
+// ─────────────────────────────────────────────────────────────────────────
+function InvitePage({ token, authUserId }) {
+  const { lang } = useLang();
+  const [info, setInfo] = useState(null);
+  const [phase, setPhase] = useState('loading');         // loading | landing | filling | computing | done | error
+  const [error, setError] = useState(null);
+  const [bUser, setBUser] = useState(null);
+  const [bReading, setBReading] = useState(null);
+  const [bPillars, setBPillars] = useState(null);
+  const [bDistribution, setBDistribution] = useState(null);
+  const [synMath, setSynMath] = useState(null);
+  const [synAi, setSynAi] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getInviteInfo(token);
+        if (cancelled) return;
+        if (!data) { setError(lang === 'zh' ? '找不到這個邀請' : 'Invite not found'); setPhase('error'); return; }
+        if (data.status !== 'pending') {
+          setError(lang === 'zh' ? '這個邀請已經完成或過期' : 'This invite has already been used or expired');
+          setPhase('error'); return;
+        }
+        setInfo(data);
+        setPhase('landing');
+      } catch (e) {
+        if (!cancelled) { setError(e.message); setPhase('error'); }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Apply element CSS vars (use B's element once known, else inviter's).
+  useEffect(() => {
+    const elem = bReading?.element || info?.inviter_element || 'water';
+    const el = ELEMENTS[elem];
+    document.documentElement.style.setProperty('--accent-glow', el.glow);
+    document.documentElement.style.setProperty('--accent-primary', el.primary);
+    document.documentElement.style.setProperty('--user-primary', el.primary);
+    document.documentElement.style.setProperty('--user-accent', el.deep);
+    document.documentElement.style.setProperty('--user-highlight', el.primary);
+  }, [bReading, info]);
+
+  const handleSubmit = async (data) => {
+    setBUser(data);
+    setPhase('computing');
+
+    const elemB = deriveElement(data.name, data.date);
+    const fallback = { element: elemB, ...POOLS[elemB] };
+    const pillarsB = computeFourPillars(data.date, data.time);
+    const distB = elementDistribution(pillarsB);
+    const dayElementB = pillarsB ? STEM_ELEMENT[pillarsB.day.stem] : elemB;
+    const insightB = interpretBazi(distB, dayElementB);
+    const nameCharsB = Array.from(data.name || '').filter((c) => c.trim()).map((ch) => {
+      const { el: ce, inferred } = charElement(ch);
+      return { ch, element: ce, inferred };
+    });
+    const pillarsForApiB = pillarsB ? {
+      year:  { stem: HEAVENLY_STEMS[pillarsB.year.stem],  branch: EARTHLY_BRANCHES[pillarsB.year.branch],  element: STEM_ELEMENT[pillarsB.year.stem] },
+      month: { stem: HEAVENLY_STEMS[pillarsB.month.stem], branch: EARTHLY_BRANCHES[pillarsB.month.branch], element: STEM_ELEMENT[pillarsB.month.stem] },
+      day:   { stem: HEAVENLY_STEMS[pillarsB.day.stem],   branch: EARTHLY_BRANCHES[pillarsB.day.branch],   element: STEM_ELEMENT[pillarsB.day.stem] },
+      hour:  pillarsB.hour ? { stem: HEAVENLY_STEMS[pillarsB.hour.stem], branch: EARTHLY_BRANCHES[pillarsB.hour.branch], element: STEM_ELEMENT[pillarsB.hour.stem] } : null,
+    } : null;
+
+    setBPillars(pillarsB);
+    setBDistribution(distB);
+
+    // 1. B's AI reading.
+    let bAi = fallback;
+    try {
+      const resp = await fetch('/api/reading', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name, date: data.date, time: data.time || '', location: data.location || '',
+          element: elemB,
+          pillars: pillarsForApiB,
+          distribution: distB,
+          dayMaster: { element: dayElementB, strength: insightB.strength.zh, dayCount: insightB.dayCount, total: insightB.total },
+          missing: insightB.missing,
+          nameChars: nameCharsB,
+          question: data.question || '',
+        }),
+      });
+      if (resp.ok) bAi = mergeReading(await resp.json(), fallback);
+      else console.warn('[aura] B reading non-OK', resp.status);
+    } catch (e) {
+      console.warn('[aura] B reading failed', e);
+    }
+    setBReading(bAi);
+
+    // 2. Persist B's reading.
+    let bReadingId = null;
+    if (authUserId) {
+      const { data: row, error: saveErr } = await saveReading({
+        userId: authUserId,
+        birthData: { name: data.name, date: data.date, time: data.time, location: data.location, question: data.question },
+        element: elemB,
+        pillars: pillarsForApiB,
+        distribution: distB,
+        aiPayload: bAi,
+        language: lang,
+      });
+      if (saveErr) console.warn('[aura] saveReading failed', saveErr);
+      bReadingId = row?.id ?? null;
+    }
+
+    // 3. Synastry math (client-side, deterministic).
+    const a = { name: info.inviter_birth.name, date: info.inviter_birth.date, time: info.inviter_birth.time || '' };
+    const b = { name: data.name, date: data.date, time: data.time || '' };
+    const math = computeSynastry(a, b);
+    setSynMath(math);
+
+    // 4. Synastry AI commentary.
+    let synOut = null;
+    try {
+      const resp = await fetch('/api/synastry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ a, b, result: math, lens: 'lover' }),
+      });
+      if (resp.ok) synOut = await resp.json();
+      else console.warn('[aura] synastry non-OK', resp.status);
+    } catch (e) {
+      console.warn('[aura] synastry failed', e);
+    }
+    if (!synOut) {
+      synOut = {
+        headline: lang === 'zh' ? '合盤已生成' : 'Synastry generated',
+        body: lang === 'zh' ? '伺服器暫時無法生成 AI 解讀。基本合盤資料：' + (SYN_REL_COPY[math.rel]?.desc || '')
+                             : 'AI commentary unavailable. Base synastry computed.',
+        advice: lang === 'zh' ? '稍後重新整理頁面再試。' : 'Reload to retry.',
+      };
+    }
+    setSynAi(synOut);
+
+    // 5. Tell server: invite complete.
+    if (bReadingId) {
+      try {
+        await completeInvite({ token, inviteeReadingId: bReadingId, synastryPayload: synOut });
+      } catch (e) {
+        console.warn('[aura] completeInvite failed', e);
+      }
+    }
+
+    setPhase('done');
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────
+  if (phase === 'loading') {
+    return <InviteFullscreen text={lang === 'zh' ? '正在讀取邀請…' : 'Loading invite…'} />;
+  }
+  if (phase === 'error') {
+    return <InviteFullscreen text={error || (lang === 'zh' ? '出錯了' : 'Error')} />;
+  }
+  if (phase === 'landing') {
+    return <InviteLanding info={info} onAccept={() => setPhase('filling')} />;
+  }
+  if (phase === 'filling') {
+    return (
+      <main className="relative min-h-screen">
+        <FlowField intensity={0.7} element={info?.inviter_element || 'water'} />
+        <div className="relative z-10 px-5 md:px-10 pt-16 md:pt-24 max-w-[1600px] mx-auto">
+          <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-4">
+            Synastry · Step 2 of 2
+          </div>
+          <h2 className="font-serif-zh text-white/95 leading-tight mb-2"
+              style={{ fontSize: 'clamp(1.75rem, 4vw, 2.75rem)' }}>
+            {lang === 'zh' ? `回應 ${info.inviter_name || '朋友'} 的邀請` : `Respond to ${info.inviter_name || 'a friend'}'s invite`}
+          </h2>
+          <p className="font-serif-zh text-white/55 text-base md:text-lg leading-relaxed mb-6">
+            {lang === 'zh' ? '填上你的生辰，AI 會同時為你產生個人 reading 與你們的合盤。' : 'Fill your birth info — AI will generate your personal reading and your synastry.'}
+          </p>
+        </div>
+        <RitualInput onSubmit={handleSubmit} />
+      </main>
+    );
+  }
+  if (phase === 'computing') {
+    return <InviteFullscreen text={lang === 'zh' ? '正在合盤…請稍候，AI 同時在為你產生個人 reading 與你們的合盤。' : 'Computing synastry…'} spinner />;
+  }
+  // phase === 'done'
+  return (
+    <InviteResult
+      info={info}
+      bUser={bUser}
+      bReading={bReading}
+      bPillars={bPillars}
+      bDistribution={bDistribution}
+      synMath={synMath}
+      synAi={synAi}
+    />
+  );
+}
+
+function InviteFullscreen({ text, spinner = false }) {
+  return (
+    <main className="relative min-h-screen flex items-center justify-center px-10">
+      <FlowField intensity={0.4} element="water" />
+      <div className="relative z-10 max-w-2xl text-center">
+        {spinner && (
+          <div className="inline-block w-12 h-12 mb-8 border border-white/20 border-t-white/80 rounded-full animate-spin" />
+        )}
+        <p className="font-serif-zh text-white/80 text-xl md:text-2xl leading-relaxed">{text}</p>
+      </div>
+    </main>
+  );
+}
+
+function InviteLanding({ info, onAccept }) {
+  const { lang } = useLang();
+  const elem = info.inviter_element || 'water';
+  const el = ELEMENTS[elem];
+  return (
+    <main className="relative min-h-screen flex items-center justify-center px-5 md:px-10">
+      <FlowField intensity={0.7} element={elem} />
+      <div className="relative z-10 max-w-2xl text-center">
+        <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-6">
+          Synastry · Invitation
+        </div>
+        <div className="font-serif-zh inline-block leading-none mb-6"
+             style={{ fontSize: 'clamp(5rem, 14vw, 9rem)', color: el.primary, textShadow: `0 0 80px rgba(${el.glow}, 0.5)` }}>
+          {el.zh}
+        </div>
+        <h1 className="font-serif-zh text-white/95 leading-tight mb-5"
+            style={{ fontSize: 'clamp(1.75rem, 5vw, 3rem)' }}>
+          {lang === 'zh'
+            ? <>{info.inviter_name || '一位朋友'} <span className="text-white/60">邀請你合盤</span></>
+            : <>{info.inviter_name || 'A friend'} <span className="text-white/60">has invited you</span></>}
+        </h1>
+        <p className="font-serif-zh text-white/65 text-base md:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
+          {lang === 'zh'
+            ? <>對方主元素為 <span className="font-serif-en italic" style={{ color: el.primary }}>{el.en}</span>。填上你的生辰，AI 會為你產生個人 reading，並合算你們的氣場互動。</>
+            : <>Their primary element is <span className="font-serif-en italic" style={{ color: el.primary }}>{el.en}</span>. Fill your birth info — AI will generate your personal reading and your synastry.</>}
+        </p>
+        <button
+          onClick={onAccept}
+          className="group relative px-10 py-5 rounded-full border border-white/20 bg-white/[0.04] backdrop-blur-xl text-white/95 hover:text-white hover:border-white/40 hover:bg-white/[0.08] transition-all font-mono text-[12px] tracking-[0.3em] uppercase"
+          style={{ boxShadow: '0 0 60px rgba(var(--accent-glow), 0.25)' }}>
+          {lang === 'zh' ? '開始填寫 →' : 'Begin →'}
+        </button>
+      </div>
+    </main>
+  );
+}
+
+function InviteResult({ info, bUser, bReading, bPillars, bDistribution, synMath, synAi }) {
+  const { lang } = useLang();
+  if (!bReading || !bUser) return null;
+  const aEl = ELEMENTS[info.inviter_element];
+  const bEl = ELEMENTS[bReading.element];
+  const relCopy = SYN_REL_COPY[synMath?.rel];
+  return (
+    <main className="relative">
+      <FlowField intensity={0.85} element={bReading.element} />
+      <div className="relative z-10">
+        {/* Synastry hero — element pair + score */}
+        <section className="px-5 md:px-10 pt-24 md:pt-32 pb-16 max-w-[1600px] mx-auto">
+          <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-6 text-center">
+            Synastry · {info.inviter_name || 'A'} ⨯ {bUser.name}
+          </div>
+          <div className="flex items-center justify-center gap-8 md:gap-16 mb-10">
+            <div className="text-center">
+              <div className="font-serif-zh leading-none" style={{ fontSize: 'clamp(4rem, 10vw, 7rem)', color: aEl.primary, textShadow: `0 0 60px rgba(${aEl.glow}, 0.5)` }}>{aEl.zh}</div>
+              <div className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase mt-3">{info.inviter_name || 'A'}</div>
+            </div>
+            <div className="font-serif-en italic text-white/40 text-3xl md:text-5xl">×</div>
+            <div className="text-center">
+              <div className="font-serif-zh leading-none" style={{ fontSize: 'clamp(4rem, 10vw, 7rem)', color: bEl.primary, textShadow: `0 0 60px rgba(${bEl.glow}, 0.5)` }}>{bEl.zh}</div>
+              <div className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase mt-3">{bUser.name}</div>
+            </div>
+          </div>
+          {synMath && (
+            <div className="text-center mb-12">
+              <div className="font-serif-en text-white/95" style={{ fontSize: 'clamp(3rem, 8vw, 6rem)', textShadow: '0 0 40px rgba(var(--accent-glow), 0.3)' }}>
+                {synMath.score}
+              </div>
+              <div className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase mt-2">
+                Compatibility · {relCopy?.zh || synMath.rel}
+              </div>
+            </div>
+          )}
+          {synAi && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <h2 className="font-serif-zh text-white/95 text-2xl md:text-3xl leading-snug text-center">{synAi.headline}</h2>
+              <p className="font-serif-zh text-white/80 leading-[1.85] whitespace-pre-line">{synAi.body}</p>
+              {synAi.advice && (
+                <div className="px-5 py-4 rounded-2xl border border-white/15 bg-white/[0.03]">
+                  <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase mb-2">{lang === 'zh' ? '一句相處建議' : 'A note on harmony'}</div>
+                  <p className="font-serif-zh text-white/85">{synAi.advice}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* B's own reading — reuse existing components */}
+        <ElementReveal element={bReading.element} name={bUser.name} />
+        <Bazi pillars={bPillars} distribution={bDistribution} name={bUser.name} />
+        <BrandPalette palette={personalPalette(bUser.name, bUser.date, bReading.element)} />
+        {bReading.lessons && (
+          <TriadCards
+            items={bReading.lessons}
+            element={bReading.element}
+            chapter={lang === 'zh' ? 'Chapter V · 本命功課' : 'Chapter V · Your Practice'}
+            titleZh="為你擬定的" titleEmZh="三項功課"
+            titleEn="Three" titleEmEn="practices for you"
+            taglineZh="依你的主元素共振，擬定本月、季、日之修持方向。"
+            taglineEn="Three practices calibrated to the resonance of your primary element."
+            screenLabel="06 Lessons"
+            accentCta={lang === 'zh' ? '記下 →' : 'Note →'} />
+        )}
+        {bReading.fortune && <Fortune element={bReading.element} aiFortune={bReading.fortune} />}
+        {bReading.analysis && <AuraAnalysis element={bReading.element} name={bUser.name} aiAnalysis={bReading.analysis} />}
+
+        <footer className="px-5 md:px-10 py-20 text-center border-t border-white/10">
+          <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">— fin —</div>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 15c-quint. INQUIRY PANEL — Chapter VIII · 對談 (initial Q&A + multi-turn follow-ups)
+// ─────────────────────────────────────────────────────────────────────────
+function InquiryPanel({ readingId, initialQuestion, initialAnswer, authUserId }) {
+  const { lang, t } = useLang();
+  const [thread, setThread] = useState([]);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  // Load existing thread from DB on mount (or whenever readingId becomes known).
+  useEffect(() => {
+    let cancelled = false;
+    if (!readingId || !isSupabaseConfigured) return;
+    (async () => {
+      const { data, error } = await loadInquiries({ readingId });
+      if (cancelled) return;
+      if (error) { console.warn('[aura] loadInquiries failed', error); return; }
+      setThread(data);
+    })();
+    return () => { cancelled = true; };
+  }, [readingId]);
+
+  const hasInitial = !!(initialQuestion && initialAnswer && (initialAnswer.zh?.trim() || initialAnswer.en?.trim()));
+
+  // Build the conversation history for /api/inquiry — alternating user/assistant turns.
+  const buildHistory = () => {
+    const turns = [];
+    if (hasInitial) {
+      turns.push({ role: 'user', content: initialQuestion });
+      turns.push({ role: 'assistant', content: initialAnswer.zh || initialAnswer.en });
+    }
+    for (const item of thread) {
+      if (item.pending || item.error) continue;
+      turns.push({ role: 'user', content: item.question });
+      turns.push({ role: 'assistant', content: item.answer?.zh || item.answer?.en || '' });
+    }
+    return turns;
+  };
+
+  const handleSend = async () => {
+    const q = draft.trim();
+    if (!q || busy || !readingId || !isSupabaseConfigured) return;
+    setBusy(true); setErr(null); setDraft('');
+    const tempId = 'tmp_' + Date.now();
+    setThread((prev) => [...prev, { id: tempId, question: q, answer: null, pending: true, created_at: new Date().toISOString() }]);
+    try {
+      const history = buildHistory();
+      const { answer } = await postInquiry({ readingId, question: q, history });
+      let savedRow = { id: tempId, question: q, answer, created_at: new Date().toISOString() };
+      if (authUserId) {
+        const { data: row, error: saveErr } = await saveInquiry({ userId: authUserId, readingId, question: q, answer });
+        if (saveErr) console.warn('[aura] saveInquiry failed', saveErr);
+        if (row?.id) savedRow = row;
+      }
+      setThread((prev) => prev.map((it) => (it.id === tempId ? savedRow : it)));
+    } catch (e) {
+      const msg = e.message || String(e);
+      setThread((prev) => prev.map((it) => (it.id === tempId ? { ...it, pending: false, error: msg } : it)));
+      setErr(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRetry = (item) => {
+    setThread((prev) => prev.filter((it) => it.id !== item.id));
+    setDraft(item.question);
+  };
+
+  const isEmpty = !hasInitial && thread.length === 0;
+  const showOffline = !isSupabaseConfigured;
+
+  return (
+    <section className="relative px-5 md:px-10 py-20 md:py-28" data-screen-label="08 Inquiry">
+      <div className="max-w-3xl mx-auto">
+        <Reveal>
+          <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-6 text-center">
+            {t('iq_chapter')}
+          </div>
+          <h2 className="font-serif-zh text-white/95 leading-[1.1] mb-4 text-center"
+              style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}>
+            {t('iq_title')}
+          </h2>
+          <p className="font-serif-zh text-white/55 text-base md:text-lg leading-relaxed mb-12 max-w-xl mx-auto text-center">
+            {t('iq_tagline')}
+          </p>
+        </Reveal>
+
+        {showOffline && (
+          <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.02] text-white/60 font-mono text-xs text-center">
+            {t('iq_offline')}
+          </div>
+        )}
+
+        {!showOffline && hasInitial && (
+          <Reveal delay={100}>
+            <article className="mb-6 p-6 md:p-8 rounded-xl border border-white/10 bg-white/[0.025] backdrop-blur-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="font-mono text-[10px] tracking-[0.3em] text-[rgb(var(--accent-glow))]/80 uppercase">{t('iq_you')}</span>
+                <span className="text-white/30 font-mono text-[10px]">·</span>
+                <span className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">{t('iq_initial_q')}</span>
+              </div>
+              <p className="font-serif-zh text-white/90 text-lg md:text-xl mb-6 leading-relaxed">{initialQuestion}</p>
+              <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mb-6" />
+              <div className="flex items-center gap-3 mb-3">
+                <span className="font-mono text-[10px] tracking-[0.3em] text-[rgb(var(--accent-glow))]/80 uppercase">{t('iq_sage')}</span>
+              </div>
+              <p className="font-serif-zh text-white/85 leading-[1.85] whitespace-pre-line">
+                {lang === 'zh' ? initialAnswer.zh : initialAnswer.en}
+              </p>
+            </article>
+          </Reveal>
+        )}
+
+        {!showOffline && isEmpty && (
+          <div className="mb-8 p-5 rounded-xl border border-white/8 bg-white/[0.015] text-white/50 font-serif-zh text-base text-center">
+            {t('iq_no_initial')}
+          </div>
+        )}
+
+        {!showOffline && thread.map((item) => (
+          <article key={item.id}
+            className="mb-5 p-5 md:p-7 rounded-xl border border-white/10 bg-white/[0.025] backdrop-blur-xl">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="font-mono text-[10px] tracking-[0.3em] text-[rgb(var(--accent-glow))]/80 uppercase">{t('iq_you')}</span>
+            </div>
+            <p className="font-serif-zh text-white/90 text-base md:text-lg mb-5 leading-relaxed">{item.question}</p>
+            <div className="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mb-5" />
+            {item.pending && (
+              <div className="flex items-center gap-3 text-white/55 font-mono text-xs">
+                <span className="inline-block w-3 h-3 border border-white/30 border-t-white/80 rounded-full animate-spin" />
+                {t('iq_thinking')}
+              </div>
+            )}
+            {item.error && (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="font-mono text-xs text-red-400/80">{t('iq_error')} · {item.error}</span>
+                <button onClick={() => handleRetry(item)}
+                  className="px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:bg-white/[0.08] text-[10px] tracking-[0.3em] uppercase font-mono text-white/85 transition-all">
+                  {t('iq_retry')}
+                </button>
+              </div>
+            )}
+            {!item.pending && !item.error && item.answer && (
+              <>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="font-mono text-[10px] tracking-[0.3em] text-[rgb(var(--accent-glow))]/80 uppercase">{t('iq_sage')}</span>
+                </div>
+                <p className="font-serif-zh text-white/85 leading-[1.85] whitespace-pre-line">
+                  {lang === 'zh' ? (item.answer.zh || item.answer.en) : (item.answer.en || item.answer.zh)}
+                </p>
+              </>
+            )}
+          </article>
+        ))}
+
+        {!showOffline && readingId && (
+          <div className="mt-8">
+            <div className="relative">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value.slice(0, 500))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+                placeholder={t('iq_input_ph')}
+                rows={2}
+                disabled={busy}
+                className="w-full px-5 py-4 rounded-xl bg-white/[0.025] border border-white/15 text-white/90 placeholder:text-white/35 font-serif-zh text-base leading-relaxed resize-none focus:outline-none focus:border-[rgb(var(--accent-glow))]/60 transition-colors disabled:opacity-50" />
+              <div className="absolute bottom-3 right-3 font-mono text-[9px] tracking-[0.25em] text-white/30 uppercase">
+                {draft.length}/500
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <MagneticButton onClick={handleSend} disabled={busy || !draft.trim()}
+                className="px-6 py-3 rounded-full border border-white/20 bg-white/[0.04] backdrop-blur-xl hover:bg-white/[0.08] hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed">
+                <span className="font-mono text-[12px] tracking-[0.3em] uppercase text-white/90">
+                  {busy ? t('iq_thinking') : t('iq_send')}
+                </span>
+              </MagneticButton>
+            </div>
+            {err && <div className="mt-3 text-red-400/80 font-mono text-xs text-right">{err}</div>}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 15c-ter. INVITE CTA — A's reading-result CTA to mint a synastry invite link
+// ─────────────────────────────────────────────────────────────────────────
+function InviteCTA({ readingId }) {
+  const { lang } = useLang();
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  if (!readingId || !isSupabaseConfigured) return null;
+
+  const handle = async () => {
+    setBusy(true); setError(null);
+    try {
+      const { invite_url, expires_at } = await createInvite({ readingId });
+      setLink({ url: invite_url, expires_at });
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!link?.url) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <section className="relative px-5 md:px-10 py-20 md:py-28" data-screen-label="08 Invite">
+      <div className="max-w-3xl mx-auto text-center">
+        <div className="text-[11px] tracking-[0.4em] text-white/50 uppercase font-mono mb-6">
+          Chapter VII · Synastry
+        </div>
+        <h2 className="font-serif-zh text-white/95 leading-[1.1] mb-5"
+            style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}>
+          {lang === 'zh' ? '邀請另一人，看你們的合盤' : 'Invite another for synastry'}
+        </h2>
+        <p className="font-serif-zh text-white/60 text-base md:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
+          {lang === 'zh'
+            ? '送出連結，對方填完生辰即可顯化雙人五行氣象。連結 7 天有效。'
+            : 'Send the link — once they fill their birth info, the synastry manifests. Valid 7 days.'}
+        </p>
+
+        {!link && (
+          <button
+            onClick={handle}
+            disabled={busy}
+            className="group relative px-8 py-4 rounded-full border border-white/20 bg-white/[0.04] backdrop-blur-xl text-white/90 hover:text-white hover:border-white/40 hover:bg-white/[0.08] transition-all font-mono text-[12px] tracking-[0.3em] uppercase disabled:opacity-50">
+            <span className="relative" style={{ boxShadow: busy ? 'none' : '0 0 40px rgba(var(--accent-glow), 0.2)' }}>
+              {busy
+                ? (lang === 'zh' ? '產生連結中…' : 'Generating…')
+                : (lang === 'zh' ? '產生邀請連結 →' : 'Generate invite link →')}
+            </span>
+          </button>
+        )}
+
+        {link && (
+          <div className="mt-2 flex flex-col items-center gap-4 max-w-xl mx-auto">
+            <div className="w-full px-5 py-4 rounded-2xl border border-white/15 bg-white/[0.03] backdrop-blur-xl flex items-center gap-3">
+              <code className="font-mono text-[12px] text-white/85 truncate flex-1 text-left">{link.url}</code>
+              <button
+                onClick={handleCopy}
+                className="shrink-0 px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:bg-white/[0.08] text-[10px] tracking-[0.3em] uppercase font-mono text-white/85 transition-all">
+                {copied ? (lang === 'zh' ? '已複製' : 'Copied') : (lang === 'zh' ? '複製' : 'Copy')}
+              </button>
+            </div>
+            <div className="font-mono text-[10px] tracking-[0.25em] text-white/40 uppercase">
+              {lang === 'zh' ? '7 天內有效' : 'Valid for 7 days'}
+            </div>
+          </div>
+        )}
+
+        {error && <div className="mt-6 text-red-400/80 font-mono text-xs">{error}</div>}
       </div>
     </section>
   );
@@ -2540,7 +2999,7 @@ function ArchiveItem({ item, onRestore, onRemove, lang, t }) {
               {el.en} · {item.date || '—'}
             </div>
             <div className="font-serif-en italic text-white/60 text-sm mt-3 leading-snug line-clamp-2">
-              {lang === 'zh' ? item.slogan : item.sloganEn}
+              {el.poem}
             </div>
             <div className="font-mono text-[9px] tracking-[0.25em] text-white/30 uppercase mt-3 flex items-center gap-2">
               <span>{t('ar_generated')} · {dateStr}</span>
@@ -2574,6 +3033,10 @@ function AppInner() {
   const t = useMemo(() => makeT(lang), [lang]);
   const langValue = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
+  // Anonymous auth — auto-creates a Supabase session on mount when configured.
+  // Falls back to no-op if VITE_SUPABASE_URL/ANON_KEY are missing.
+  const { user: authUser } = useAnonymousAuth();
+
   // hero | ritual | ceremony | result
   const savedState = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('aura_state') || 'null') || {}; }
@@ -2582,8 +3045,17 @@ function AppInner() {
   const [state, setState] = useState(savedState.state || 'hero');
   const [user, setUser] = useState(savedState.user || { name: '', date: '', time: '' });
   const [generated, setGenerated] = useState(savedState.generated || null);
+  const [dbReadingId, setDbReadingId] = useState(null);
+  const [inviteToken] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('invite') || null;
+  });
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [synastryOpen, setSynastryOpen] = useState(false);
+
+  // AbortController for the in-flight /api/reading. Stored in a ref so
+  // closures can't lose it and we can cancel a stale request when the user resubmits.
+  const readingControllerRef = useRef(null);
   useEffect(() => {
     localStorage.setItem('aura_state', JSON.stringify({ state, user, generated }));
   }, [state, user, generated]);
@@ -2648,8 +3120,12 @@ function AppInner() {
     } : null;
 
     let result = fallback;
+    // Cancel any prior in-flight fetch (defensive — handles re-submit / StrictMode double-invoke).
+    if (readingControllerRef.current) readingControllerRef.current.abort();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90_000); // 90s hard cap
+    readingControllerRef.current = controller;
+    // 180s hard cap — Claude w/ adaptive thinking + 16k tokens can be slow.
+    const timeoutId = setTimeout(() => controller.abort(new DOMException('client-timeout', 'TimeoutError')), 180_000);
     try {
       const resp = await fetch('/api/reading', {
         method: 'POST',
@@ -2677,13 +3153,20 @@ function AppInner() {
         console.warn('[aura] /api/reading non-OK', resp.status, errBody.slice(0, 300));
       }
     } catch (err) {
-      console.warn('[aura] /api/reading failed, using fallback', err);
+      if (err?.name === 'AbortError') {
+        const reason = controller.signal.reason;
+        const tag = reason?.name === 'TimeoutError' ? 'client-timeout(180s)' : 'aborted';
+        console.warn('[aura] /api/reading aborted', tag, reason);
+      } else {
+        console.warn('[aura] /api/reading failed, using fallback', err);
+      }
     } finally {
       clearTimeout(timeoutId);
+      if (readingControllerRef.current === controller) readingControllerRef.current = null;
     }
 
     setGenerated(result);
-    // Archive it
+    // Archive it (localStorage — kept as offline fallback / source of truth pre-Supabase)
     const entry = {
       id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       createdAt: Date.now(),
@@ -2692,6 +3175,25 @@ function AppInner() {
     };
     addToArchive(entry);
     window.dispatchEvent(new Event('aura:archive-changed'));
+
+    // Persist to Supabase. Capture the row id so the invite CTA can reference it.
+    if (authUser?.id) {
+      saveReading({
+        userId: authUser.id,
+        birthData: { name: data.name, date: data.date, time: data.time, location: data.location, question: data.question },
+        element: result.element,
+        pillars: pillarsForApi,
+        distribution: submitDist,
+        aiPayload: result,
+        language: lang,
+      }).then(({ data: row, error }) => {
+        if (error) {
+          console.warn('[aura] saveReading failed', error);
+          return;
+        }
+        if (row?.id) setDbReadingId(row.id);
+      });
+    }
   };
 
   const restoreFromArchive = (entry) => {
@@ -2705,10 +3207,12 @@ function AppInner() {
   };
 
   // On mount: if URL has shared params and we have no in-flight reading, auto-trigger.
+  // Invite-token mode short-circuits this — InvitePage handles its own URL param.
   const bootedFromUrlRef = useRef(false);
   useEffect(() => {
     if (bootedFromUrlRef.current) return;
     bootedFromUrlRef.current = true;
+    if (inviteToken) return;
     if (generated) return; // already restored from localStorage
     const sp = new URLSearchParams(window.location.search);
     const n = sp.get('n'), d = sp.get('d'), t = sp.get('t') || '', l = sp.get('l') || '';
@@ -2721,6 +3225,7 @@ function AppInner() {
   const restart = useCallback(() => {
     setState('ritual');
     setGenerated(null);
+    setDbReadingId(null);
     // After the Ritual Input re-mounts, scroll to it.
     setTimeout(() => {
       const ri = document.querySelector('[data-screen-label="02 Ritual Input"]');
@@ -2728,6 +3233,16 @@ function AppInner() {
       else window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
     }, 120);
   }, []);
+
+  // If we arrived via an invite link, render the dedicated B-side flow and skip the normal hero/ritual.
+  if (inviteToken) {
+    return (
+      <LangContext.Provider value={langValue}>
+        <CursorFollower />
+        <InvitePage token={inviteToken} authUserId={authUser?.id} />
+      </LangContext.Provider>
+    );
+  }
 
   return (
     <LangContext.Provider value={langValue}>
@@ -2755,8 +3270,7 @@ function AppInner() {
           <>
             <ElementReveal element={generated.element} name={user.name} />
             <Bazi pillars={pillars} distribution={distribution} name={user.name} />
-            <SloganParallax slogan={generated.slogan} sloganEn={generated.sloganEn} />
-            <VisualPackage element={generated.element} brandName={generated.brand} palette={palette} />
+            <BrandPalette palette={palette} />
             <ShareCardButton user={user} generated={generated} palette={palette} />
             <TriadCards
               items={generated.lessons}
@@ -2780,6 +3294,13 @@ function AppInner() {
               accentCta={lang === 'zh' ? '收方 →' : 'Receive →'} />
             <Fortune element={generated.element} aiFortune={generated.fortune} />
             <AuraAnalysis element={generated.element} name={user.name} aiAnalysis={generated.analysis} />
+            <InquiryPanel
+              readingId={dbReadingId}
+              initialQuestion={user.question}
+              initialAnswer={generated.qa?.answer}
+              authUserId={authUser?.id}
+            />
+            <InviteCTA readingId={dbReadingId} />
           </>
         )}
 

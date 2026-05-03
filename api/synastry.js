@@ -50,7 +50,12 @@ const LENS_LABEL = {
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
 const ALLOWED_REFERERS = (process.env.ALLOWED_REFERERS || 'http://localhost:3000,http://localhost:5173')
   .split(',').map((s) => s.trim()).filter(Boolean);
-function isAllowedReferer(r) { return r && ALLOWED_REFERERS.some((a) => r.startsWith(a)); }
+function isAllowedReferer(r) {
+  if (!r) return false;
+  // Dev convenience: any localhost port is allowed (vercel dev / vite dev / etc).
+  if (/^https?:\/\/localhost(:\d+)?(\/|$)/.test(r)) return true;
+  return ALLOWED_REFERERS.some((a) => r.startsWith(a));
+}
 const RATE_WINDOW_MS = 60_000, RATE_MAX = 5;
 const buckets = new Map();
 function rateLimited(ip) {

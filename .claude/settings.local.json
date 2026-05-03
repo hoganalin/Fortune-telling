@@ -5,7 +5,17 @@
       "Bash(git check-ignore *)",
       "Bash(node --check api/reading.js)",
       "Bash(npm run *)",
-      "Bash(echo \"---exit:$?\")"
+      "Bash(echo \"---exit:$?\")",
+      "Bash(npx vite *)",
+      "Bash(rm -rf node_modules package-lock.json)",
+      "Bash(npm install *)",
+      "Bash(npx eslint *)",
+      "Bash(git stash *)",
+      "Bash(grep -n \"^function ShareCardButton\\\\|^// ─\\\\+$\\\\|^function SynastryPage\" /home/rogan/side-project/ai-brand-generator/src/App.jsx)",
+      "Bash(grep -n \"bootedFromUrlRef\\\\|sp\\\\.get\\\\|return \\(\\\\s*$\\\\|return \\(\\\\$\" /home/rogan/side-project/ai-brand-generator/src/App.jsx)",
+      "Bash(awk '/SUPABASE/ {gsub\\(/=.*/, \"=<HIDDEN>\"\\); print NR\": [\"$0\"]\"}' /home/rogan/side-project/ai-brand-generator/.env.local)",
+      "Bash(curl -s \"http://localhost:5174/src/lib/supabase.js\")",
+      "Bash(curl -s \"http://localhost:5173/src/lib/supabase.js\")"
     ]
   }
 }

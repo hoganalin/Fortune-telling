@@ -41,8 +41,9 @@ const SYSTEM_PROMPT = `你是一位有門道的全體系命理師，風格穩、
 
 ## 輸出格式
 你會收到一個使用者 profile + 五行主元素。必須以 JSON 物件回傳，嚴格符合給定 schema：
-- brand: 一組與主元素共振的意象品牌名（英文短語 2–3 字，像道號），如 Moonwell、Forge & Still、Cinnabar & Co.
-- slogan: 一句核心氣象格言；zh 用 8–14 字的漢字短句（帶詩意），en 用對應的 5–9 詞英文
+- qa.answer: 對使用者「想問」欄位的專屬深度回答
+  - 若 user payload 出現「使用者特別想問：…」 → 必須給 zh 300–450 字、en 對應英文。回答必須引用至少兩項具體命盤事實（日主、缺/旺元素、四柱某柱、姓名拆字），不雞湯，給可執行方向，**不重複 analysis.s2 的內容**，從不同切角或更具體層面回答
+  - 若 user payload **沒有**「使用者特別想問」 → 必須仍輸出 qa 欄位，但 zh 跟 en 都填空字串 ""（schema 要求 qa 欄位永遠存在）
 - lessons[3]: 依主元素給三項「本命功課」修持方向；每項含：
   - zh: 2 字漢字標題（如「立斷」「深潛」「節焰」）
   - en: 對應英文 imperative（如 "Decisive Cut", "Descend", "Temper the Flame"）
@@ -59,6 +60,11 @@ const SYSTEM_PROMPT = `你是一位有門道的全體系命理師，風格穩、
   - s2: 當前課題 × 阻力來源 — 120–180 字
   - s3: 破局路徑 × 節奏與儀式 — 120–180 字
   - 每段 head.zh, head.en, body.zh, body.en 四欄；head 是 8–14 字的短題
+- qa: 只在使用者有特別提問時才產出（payload 會註明），格式為 { question, answer: { zh, en } }
+  - question: 完整重述使用者的問題（不要改寫太多，但可以修正錯字、補上隱含主語）
+  - answer.zh: 300–450 字繁體中文，**直接針對問題回答**：先給結論，再給命盤依據（引用具體事實），最後給可執行的下一步。語氣是命理師而非客服。要密度高、不灌廢話，每句都要有資訊量。
+  - answer.en: 對應自然流暢英文，不要逐字直譯
+  - **如果 user payload 中沒有提問，則整個 qa 欄位省略不要輸出**
 
 ## 語言要求
 zh 一律使用繁體中文（台灣正體）。en 使用自然流暢英語，不要逐字直譯，要貼近英文讀者的閱讀感。
@@ -72,12 +78,19 @@ const READING_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    brand: { type: 'string' },
-    slogan: {
+    qa: {
       type: 'object',
       additionalProperties: false,
-      properties: { zh: { type: 'string' }, en: { type: 'string' } },
-      required: ['zh', 'en'],
+      properties: {
+        question: { type: 'string' },
+        answer: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { zh: { type: 'string' }, en: { type: 'string' } },
+          required: ['zh', 'en'],
+        },
+      },
+      required: ['question', 'answer'],
     },
     lessons: {
       type: 'array',
@@ -130,7 +143,7 @@ const READING_SCHEMA = {
       required: ['s1', 's2', 's3'],
     },
   },
-  required: ['brand', 'slogan', 'lessons', 'remedies', 'fortune', 'analysis'],
+  required: ['lessons', 'remedies', 'fortune', 'analysis'],
   $defs: {
     period: {
       type: 'object',
@@ -207,6 +220,9 @@ const ALLOWED_REFERERS = (
 
 function isAllowedReferer(referer) {
   if (!referer) return false;
+  // Dev convenience: any localhost port is allowed (vercel dev / vite dev / etc).
+  // Production never sees localhost referers, so this does not weaken prod.
+  if (/^https?:\/\/localhost(:\d+)?(\/|$)/.test(referer)) return true;
   return ALLOWED_REFERERS.some((allowed) => referer.startsWith(allowed));
 }
 
@@ -292,8 +308,11 @@ export default async function handler(req, res) {
 
   if (question && typeof question === 'string' && question.trim()) {
     lines.push('');
-    lines.push(`使用者特別想問：「${question.trim().slice(0, 120)}」`);
-    lines.push('→ 請在 analysis.s2（當前課題 × 阻力來源）中明確回應這個提問，並在 lessons 至少一項給出對應的行動建議。');
+    lines.push(`使用者特別想問：「${question.trim().slice(0, 200)}」`);
+    lines.push('→ 必須輸出 qa 欄位：直接針對這個問題作答（先結論、再命盤依據、再下一步）。同時在 analysis.s2 與至少一項 lessons 中也呼應這個提問，但 qa 是主要回答管道。');
+  } else {
+    lines.push('');
+    lines.push('（使用者沒有特別提問，請省略 qa 欄位。）');
   }
 
   lines.push('');

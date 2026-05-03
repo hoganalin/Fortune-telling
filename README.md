@@ -1,12 +1,12 @@
-# Aura AI Studio · 命盤品牌產生器
+# Aura · AI 五行
 
-一個以**八字日主**為起點、用 **Claude API** 做深度命理解讀的單頁 Web 應用。使用者輸入姓名、生辰、時辰、出生地，系統先以 Julian Day Number 推算日干並對應五行主元素，再把 profile 送到 Vercel serverless function，由 Claude（Opus 4.7 或 Sonnet 4.6）依照命理師框架生成完整 reading。也支援雙人合盤（synastry）分析。
+一個以**八字日主**為起點、用 **Claude API** 做深度命理解讀的單頁 Web 應用。使用者輸入姓名、生辰、時辰、出生地，系統先以 Julian Day Number 推算日干並對應五行主元素，再把 profile 送到 Vercel serverless function，由 Claude（Opus 4.7 或 Sonnet 4.6）依照命理師框架生成個人 reading。完成後可選擇邀請另一人合盤（synastry），看雙方的氣場互動。
 
 **Live**：https://fortune-telling.vercel.app
 
 ## 設計主軸
 
-不是品牌產生器，是**命理師 × 生成式 AI** 的氛圍體驗。張力來自：
+**命理師 × 生成式 AI** 的氛圍體驗——個人 reading 是 onboarding hook，雙人合盤是 viral loop。張力來自：
 
 - **玄學厚度**來自排版秩序與材質——襯線標題（Fraunces × Noto Serif TC）、宣紙噪點、毛玻璃卡片
 - **科技感**來自光學行為——Canvas 2D 流場粒子（水墨遊絲而非星空）、毛玻璃折射、局部光暈
@@ -18,7 +18,7 @@
 |---|---|
 | **日干推算** | Gregorian 日期 → JDN → 60-甲子循環，錨定 2000-01-07 甲子日。客戶端純函式，不需要 API |
 | **五行主元素** | 金／木／水／火／土，整頁 accent color 透過 `--accent-glow` CSS 變數 runtime 切換；粒子、邊框、descender 全部響應 |
-| **AI Reading**（`/api/reading`） | Claude 回傳結構化 JSON：Brand name + Slogan（雙語）+ 3 項本命功課 + 3 帖五行藥方 + Fortune（今年/當月/當日 × 總評 + 事業/情感/健康）+ Analysis（體質綜述 / 當前課題 / 破局路徑） |
+| **AI Reading**（`/api/reading`） | Claude 回傳結構化 JSON：3 項本命功課 + 3 帖五行藥方 + Fortune（今年/當月/當日 × 總評 + 事業/情感/健康）+ Analysis（體質綜述 / 當前課題 / 破局路徑） |
 | **AI 合盤**（`/api/synastry`） | 兩人五行命盤資料 → Claude 回傳 500–700 字的關係氣象、互動結構、張力與互補、相處節奏 |
 | **解讀框架** | 蒸餾自 `fortune-master-pro-dao-v2` 技能：**人格底色 + 當前課題 + 阻力來源 + 破局路徑** |
 | **繁英雙語** | Top bar 切換，Hero / Ritual / Archive / Analysis 全部對應翻譯。AI 也同時回傳 zh / en 兩套文案 |
