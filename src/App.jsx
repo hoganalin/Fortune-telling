@@ -2433,21 +2433,62 @@ function InquiryPanel({ readingId, initialQuestion, initialAnswer, authUserId })
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const recoveryFiredRef = useRef(false);
 
   // Load existing thread from DB on mount (or whenever readingId becomes known).
   useEffect(() => {
     let cancelled = false;
-    if (!readingId || !isSupabaseConfigured) return;
+    setLoaded(false);
+    recoveryFiredRef.current = false;
+    if (!readingId || !isSupabaseConfigured) { setLoaded(true); return; }
     (async () => {
       const { data, error } = await loadInquiries({ readingId });
       if (cancelled) return;
-      if (error) { console.warn('[aura] loadInquiries failed', error); return; }
-      setThread(data);
+      if (error) console.warn('[aura] loadInquiries failed', error);
+      else setThread(data);
+      setLoaded(true);
     })();
     return () => { cancelled = true; };
   }, [readingId]);
 
   const hasInitial = !!(initialQuestion && initialAnswer && (initialAnswer.zh?.trim() || initialAnswer.en?.trim()));
+
+  // Recovery — user typed a question on the homepage but /api/reading didn't
+  // return a qa block (Claude omitted it, the request timed out, or the POOLS
+  // fallback was used). Re-issue the question through /api/inquiry as the
+  // first turn so the answer still appears in this panel.
+  useEffect(() => {
+    if (!loaded) return;
+    if (recoveryFiredRef.current) return;
+    if (!readingId || !isSupabaseConfigured) return;
+    if (!initialQuestion?.trim()) return;
+    if (hasInitial) return;
+    if (thread.length > 0) return;
+    recoveryFiredRef.current = true;
+    const q = initialQuestion.trim();
+    const tempId = 'tmp_recovery_' + Date.now();
+    setBusy(true); setErr(null);
+    setThread([{ id: tempId, question: q, answer: null, pending: true, created_at: new Date().toISOString() }]);
+    (async () => {
+      try {
+        const { answer } = await postInquiry({ readingId, question: q, history: [] });
+        let savedRow = { id: tempId, question: q, answer, created_at: new Date().toISOString() };
+        if (authUserId) {
+          const { data: row, error: saveErr } = await saveInquiry({ userId: authUserId, readingId, question: q, answer });
+          if (saveErr) console.warn('[aura] recovery saveInquiry failed', saveErr);
+          if (row?.id) savedRow = row;
+        }
+        setThread((prev) => prev.map((it) => (it.id === tempId ? savedRow : it)));
+      } catch (e) {
+        const msg = e.message || String(e);
+        setThread((prev) => prev.map((it) => (it.id === tempId ? { ...it, pending: false, error: msg } : it)));
+        setErr(msg);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [loaded, readingId, initialQuestion, hasInitial, thread.length, authUserId]);
 
   // Build the conversation history for /api/inquiry — alternating user/assistant turns.
   const buildHistory = () => {
@@ -3170,7 +3211,7 @@ function AppInner() {
     const entry = {
       id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       createdAt: Date.now(),
-      name: data.name, date: data.date, time: data.time,
+      name: data.name, date: data.date, time: data.time, question: data.question || '',
       ...result,
     };
     addToArchive(entry);
@@ -3197,9 +3238,9 @@ function AppInner() {
   };
 
   const restoreFromArchive = (entry) => {
-    setUser({ name: entry.name, date: entry.date, time: entry.time || '' });
-    const { id, createdAt, name, date, time, ...rest } = entry;
-    void id; void createdAt; void name; void date; void time;
+    setUser({ name: entry.name, date: entry.date, time: entry.time || '', question: entry.question || '' });
+    const { id, createdAt, name, date, time, question, ...rest } = entry;
+    void id; void createdAt; void name; void date; void time; void question;
     setGenerated(rest);
     setState('result');
     setArchiveOpen(false);
