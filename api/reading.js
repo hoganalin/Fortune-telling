@@ -1,9 +1,17 @@
 // Vercel serverless function — POST /api/reading
 // Generates a full AI-authored fortune reading for the Aura AI Studio front end.
-// Uses Claude Opus 4.7 with adaptive thinking + JSON-schema structured output.
+// Uses Claude Sonnet/Opus with JSON-schema structured output.
 // Distilled system prompt rooted in the fortune-master-pro-dao-v2 skill framework.
 
 import Anthropic from '@anthropic-ai/sdk';
+
+// Vercel function config — generous ceiling for Pro plans.
+// Anthropic structured output without thinking typically returns in 30–60s.
+// Hobby plan caps at 60s; if you're on Hobby this still works because we
+// dropped adaptive thinking below to keep latency under that ceiling.
+export const config = {
+  maxDuration: 300,
+};
 
 const SYSTEM_PROMPT = `你是一位有門道的全體系命理師，風格穩、準、有層次，貼近真人老師的口吻，而不是空洞雞湯或模板拼接。
 
@@ -324,7 +332,10 @@ export default async function handler(req, res) {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 16000,
-      thinking: { type: 'adaptive' },
+      // Adaptive thinking was pushing latency well over 60s on Vercel Hobby
+      // (and the client AbortController gives up at 180s). The structured
+      // JSON-schema output mode + the detailed system prompt are enough to
+      // hit quality without burning extra wall-clock on internal reasoning.
       output_config: {
         format: {
           type: 'json_schema',

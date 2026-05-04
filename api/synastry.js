@@ -3,6 +3,12 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
+// Vercel function config — synastry uses 4000 tokens, no thinking.
+// 60s is comfortable; default 10s (Hobby) was almost certainly 504-ing.
+export const config = {
+  maxDuration: 60,
+};
+
 const SYSTEM_PROMPT = `你是一位擅長關係命理的命理師，根據兩人五行命盤資料給出深入的合盤分析。
 
 ## 字數要求（硬性）

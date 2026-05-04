@@ -10,6 +10,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 
+// Vercel function config — inquiry is a 2000-token call without thinking, so
+// 60s is comfortable. The default function timeout (10s on Hobby) was killing
+// requests with a 504 before Anthropic could respond.
+export const config = {
+  maxDuration: 60,
+};
+
 const SYSTEM_PROMPT = `你是一位有門道的全體系命理師，正在跟使用者進行延伸對談。前一輪你已經給過完整 reading 與初次提問的回答，現在使用者基於那份命盤再追問。
 
 ## 對談原則
