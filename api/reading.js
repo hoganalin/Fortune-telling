@@ -216,7 +216,12 @@ const ELEMENT_LABEL = {
   earth: '土 Earth',
 };
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
+// Default to Sonnet, not Opus. Opus + 16k max_tokens routinely runs 90–180s
+// on the Anthropic API (it generates more slowly per token), which exceeds
+// both Vercel's function ceiling and the client AbortController. Sonnet 4.6
+// with the same schema returns the same structure in ~20–40s. Override via
+// the ANTHROPIC_MODEL env var if you really want Opus.
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
 const ALLOWED_REFERERS = (
   process.env.ALLOWED_REFERERS || 'http://localhost:3000,http://localhost:5173'
@@ -331,7 +336,10 @@ export default async function handler(req, res) {
 
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 16000,
+      // 8k is enough to fill every required field in READING_SCHEMA with
+      // generous prose. Going higher just lets the model meander and
+      // pushes wall-clock past Vercel's function ceiling.
+      max_tokens: 8000,
       // Adaptive thinking was pushing latency well over 60s on Vercel Hobby
       // (and the client AbortController gives up at 180s). The structured
       // JSON-schema output mode + the detailed system prompt are enough to
