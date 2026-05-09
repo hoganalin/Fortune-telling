@@ -1797,7 +1797,7 @@ function Fortune({ element, aiFortune }) {
 // 14. AURA ANALYSIS (academic two-column)
 // ─────────────────────────────────────────────────────────────────────────
 function AuraAnalysis({ element, name, aiAnalysis }) {
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   const el = ELEMENTS[element];
   const sectionHeading = (secKey, zhFallback, enFallback) => {
     const sec = aiAnalysis?.[secKey];
@@ -1818,12 +1818,18 @@ function AuraAnalysis({ element, name, aiAnalysis }) {
         <Reveal>
           <div className="border-t border-white/15 pt-8 mb-16 flex justify-between items-end">
             <div>
-              <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase mb-2">Document № AAS-2026-壹 · Confidential</div>
-              <h2 className="font-serif-en italic text-white text-5xl md:text-6xl">An Analysis of <br/>the <span style={{ color: 'var(--user-primary)' }}>{el.en}</span> Constitution</h2>
+              <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase mb-2">{t('an_doc')}</div>
+              <h2 className={`${lang === 'zh' ? 'font-serif-zh' : 'font-serif-en italic'} text-white text-5xl md:text-6xl`}>
+                {lang === 'zh' ? (
+                  <>{t('an_title_pre')}<br/><span style={{ color: 'var(--user-primary)' }}>{el.zh}</span>{t('an_title_post')}</>
+                ) : (
+                  <>An Analysis of <br/>the <span style={{ color: 'var(--user-primary)' }}>{el.en}</span> Constitution</>
+                )}
+              </h2>
             </div>
             <div className="hidden md:block text-right">
-              <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">Subject</div>
-              <div className="font-serif-zh text-white text-xl mt-1">{name || '訪客'}</div>
+              <div className="font-mono text-[10px] tracking-[0.3em] text-white/40 uppercase">{t('an_subject')}</div>
+              <div className="font-serif-zh text-white text-xl mt-1">{name || t('er_guest')}</div>
             </div>
           </div>
         </Reveal>
@@ -1831,11 +1837,11 @@ function AuraAnalysis({ element, name, aiAnalysis }) {
         <div className="grid md:grid-cols-12 gap-10">
           <aside className="md:col-span-3 space-y-8">
             <Reveal delay={100}>
-              <MetaBlock label="Primary Element" value={`${el.zh} · ${el.en}`} />
-              <MetaBlock label="Season" value="Spring · 木旺" />
-              <MetaBlock label="Direction" value="East · 東方" />
-              <MetaBlock label="Resonance" value="A-432Hz" />
-              <MetaBlock label="Prepared by" value="Aura AI Studio" />
+              <MetaBlock label={t('an_meta_primary')} value={`${el.zh} · ${el.en}`} />
+              <MetaBlock label={t('an_meta_season')} value={t('an_season_v')} />
+              <MetaBlock label={t('an_meta_dir')} value={t('an_dir_v')} />
+              <MetaBlock label={t('an_meta_res')} value={t('an_res_v')} />
+              <MetaBlock label={t('an_meta_prep')} value={t('an_prep_v')} />
             </Reveal>
           </aside>
 
@@ -1882,8 +1888,8 @@ function AuraAnalysis({ element, name, aiAnalysis }) {
 
             <Reveal delay={500}>
               <div className="pt-8 border-t border-white/15 flex justify-between text-[10px] font-mono tracking-[0.3em] text-white/40 uppercase">
-                <span>— End of document —</span>
-                <span>Page 01 / 01</span>
+                <span>{t('an_end')}</span>
+                <span>{t('an_page')}</span>
               </div>
             </Reveal>
           </div>
